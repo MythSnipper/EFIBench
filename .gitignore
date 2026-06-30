@@ -1,0 +1,4 @@
+App/build/*
+App/mount/*
+App/usbroot/*
+Installer/target/*
