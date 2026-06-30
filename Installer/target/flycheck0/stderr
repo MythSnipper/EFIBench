@@ -1,0 +1,50 @@
+   0.005772057s  INFO prepare_target{force=false package_id=Installer v0.1.0 (/home/mythsnipper/Dev/EFIBench/Installer) target="Installer"}: cargo::core::compiler::fingerprint: fingerprint error for Installer v0.1.0 (/home/mythsnipper/Dev/EFIBench/Installer)/Check { test: false }/TargetInner { name: "Installer", doc: true, ..: with_path("/home/mythsnipper/Dev/EFIBench/Installer/src/main.rs", Edition2024) }
+   0.005786847s  INFO prepare_target{force=false package_id=Installer v0.1.0 (/home/mythsnipper/Dev/EFIBench/Installer) target="Installer"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/mythsnipper/Dev/EFIBench/Installer/target/debug/.fingerprint/Installer-da332cfce16bd287/bin-Installer`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: __libc_start_main
+  16: <unknown>
+   0.006551801s  INFO prepare_target{force=false package_id=Installer v0.1.0 (/home/mythsnipper/Dev/EFIBench/Installer) target="Installer"}: cargo::core::compiler::fingerprint: fingerprint error for Installer v0.1.0 (/home/mythsnipper/Dev/EFIBench/Installer)/Check { test: true }/TargetInner { name: "Installer", doc: true, ..: with_path("/home/mythsnipper/Dev/EFIBench/Installer/src/main.rs", Edition2024) }
+   0.006556421s  INFO prepare_target{force=false package_id=Installer v0.1.0 (/home/mythsnipper/Dev/EFIBench/Installer) target="Installer"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/mythsnipper/Dev/EFIBench/Installer/target/debug/.fingerprint/Installer-18a5b5866194e5fe/test-bin-Installer`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: __libc_start_main
+  16: <unknown>
+    Checking Installer v0.1.0 (/home/mythsnipper/Dev/EFIBench/Installer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
