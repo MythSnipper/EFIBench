@@ -1,10 +1,12 @@
 #include <EFIBench.h>
 
+EFI_HANDLE IH;
 
-
-EFI_STATUS
-efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
+EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
     InitializeLib(ImageHandle, SystemTable);
+
+    //set to global
+    IH = ImageHandle;
 
     //disable watchdog timer
     uefi_call_wrapper(BS->SetWatchdogTimer, 4, 0, 0, 0, NULL);
@@ -271,6 +273,21 @@ void menu_settings(){
     }
 }
 
+
+
+//allocate bytes of contiguous memory
+void* malloc(uint64_t bytes){
+    void* buf = NULL;
+    EFI_STATUS status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, bytes, &buf);
+    if(EFI_ERROR(status)){
+        return NULL;
+    }
+    return buf;
+}
+//free allocated memory
+void free(void* ptr){
+    uefi_call_wrapper(BS->FreePool, 1, ptr);
+}
 //clears the screen
 void clrscr(){
     uefi_call_wrapper(ST->ConOut->ClearScreen, 1, ST->ConOut);
@@ -299,7 +316,200 @@ void hang(){
     }
 }
 
+//dead code that will be used when image loading
+/*
+
+
+    EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *Fs;
+    
+    gBS->OpenProtocol(
+        ImageHandle,
+        &gEfiLoadedImageProtocolGuid,
+        (VOID **)&LoadedImage,
+        ImageHandle,
+        NULL,
+        EFI_OPEN_PROTOCOL_GET_PROTOCOL
+    );
+    
+    gBS->OpenProtocol(
+        LoadedImage->DeviceHandle,
+        &gEfiSimpleFileSystemProtocolGuid,
+        (VOID **)&Fs,
+        ImageHandle,
+        NULL,
+        EFI_OPEN_PROTOCOL_GET_PROTOCOL
+    );
+
+
+
+
+*/
+
+//gets the length of a string
+uint64_t strlen(char* str){
+    uint64_t len = 0;
+
+    while(str[len] != '\0'){
+        len++;
+    }
+
+    return len;
+}
+//gets the length of a wide character
+uint64_t wstrlen(wchar_t* str){
+    uint64_t len = 0;
+
+    while(str[len] != L'\0'){
+        len++;
+    }
+
+    return len;
+}
+
+//reads a file from its file path and returns a pointer to the start
+char* read_file(wchar_t* filepath, uint64_t* file_size_out){
+
+    EFI_STATUS status;
+
+    //get SFSP from UEFI
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* SFSP;
+    status = uefi_call_wrapper(BS->LocateProtocol, 3, &gEfiSimpleFileSystemProtocolGuid, NULL, (void**)&SFSP);
+    if(EFI_ERROR(status)){
+        Print(L"No SFSP\r\n");
+        hang();
+    }
+
+    EFI_FILE_PROTOCOL* root;
+    status = uefi_call_wrapper(SFSP->OpenVolume, 2, SFSP, &root);
+    if(EFI_ERROR(status)){
+        Print(L"No Volume\r\n");
+        hang();
+    }
+
+    EFI_FILE_PROTOCOL* file;
+    status = uefi_call_wrapper(root->Open, 5, root, &file, filepath, EFI_FILE_MODE_READ, 0);
+    if(EFI_ERROR(status)){
+        Print(L"No File\r\n");
+        hang();
+    }
+
+    //get file size
+    EFI_FILE_INFO* file_info = LibFileInfo(file);
+    if(file_info == NULL){
+        Print(L"No file info\r\n");
+        hang();
+    }
+
+    uint64_t file_size = file_info->FileSize;
+    char* buf = malloc(file_size + 1); //include null terminator
+
+    uint64_t read_size = file_size;
+    status = uefi_call_wrapper(file->Read, 3, file, &read_size, buf);
+    if(EFI_ERROR(status)){
+        Print(L"No Read\r\n");
+        hang();
+    }
+
+    buf[file_size] = '\0'; //set null terminator
+    //return file size if the ptr is not null
+    if(file_size_out != NULL){
+        *file_size_out = file_size;
+    }
+
+    uefi_call_wrapper(file->Close, 1, file);
+    uefi_call_wrapper(root->Close, 1, root);
+
+    return buf;
+}
+
+//writes a null terminated string to a file
+void write_file(wchar_t* filepath, void* buf){
+    EFI_STATUS status;
+
+    //get SFSP from UEFI
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* SFSP;
+    status = uefi_call_wrapper(BS->LocateProtocol, 3, &gEfiSimpleFileSystemProtocolGuid, NULL, (void**)&SFSP);
+    if(EFI_ERROR(status)){
+        Print(L"No SFSP\r\n");
+        hang();
+    }
+
+    EFI_FILE_PROTOCOL* root;
+    status = uefi_call_wrapper(SFSP->OpenVolume, 2, SFSP, &root);
+    if(EFI_ERROR(status)){
+        Print(L"No Volume\r\n");
+        hang();
+    }
+
+    EFI_FILE_PROTOCOL* file;
+    status = uefi_call_wrapper(root->Open, 5, root, &file, filepath, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
+    if(EFI_ERROR(status)){
+        Print(L"No File\r\n");
+        hang();
+    }
+
+    uint64_t filesize = strlen(buf);
+    status = uefi_call_wrapper(file->Write, 3, file, &filesize, buf);
+    if(EFI_ERROR(status)){
+        Print(L"No Write\r\n");
+        hang();
+    }
+
+    uefi_call_wrapper(file->Close, 1, file);
+    uefi_call_wrapper(root->Close, 1, root);
+}
+
+//load an image into memory and start it from the file path
+void start_efi_image(wchar_t* filepath){
+    EFI_STATUS status;
+
+    //get LoadedImageProtocol
+    EFI_LOADED_IMAGE_PROTOCOL* LIP;
+    status = uefi_call_wrapper(BS->HandleProtocol, 3, IH, &gEfiLoadedImageProtocolGuid, (void**)&LIP);
+    if(EFI_ERROR(status)){
+        Print(L"No LoadedImageProtocol\r\n");
+        hang();
+    }
+
+    //get image path
+    EFI_DEVICE_PATH_PROTOCOL* image_path = NULL;
+    image_path = FileDevicePath(LIP->DeviceHandle, filepath);
+    if(image_path == NULL){
+        Print(L"No device path\r\n");
+        hang();
+    }
+
+    //load image to memory
+    EFI_HANDLE image_handle;
+    status = uefi_call_wrapper(BS->LoadImage, 6, false, IH, image_path, NULL, 0, &image_handle);
+    if(EFI_ERROR(status)){
+        Print(L"No Load Image\r\n");
+        hang();
+    }
+
+    //start image
+    status = uefi_call_wrapper(BS->StartImage, 3, image_handle, NULL, NULL);
+    if(EFI_ERROR(status)){
+        Print(L"No StartImage\r\n");
+        hang();
+    }
+}
+
 
 void test(){
+    UINTN size;
+    char* data = read_file(L"\\EFIBench\\meow.txt", &size);
+
+    if(data != NULL){
+        Print(L"File size: %u bytes\r\n", size);
+        Print(L"%a\r\n", data);
+
+        uefi_call_wrapper(BS->FreePool, 1, data);
+    }
+
+    write_file(L"\\vel.txt", "meowmeowmeow ily elena <3\r\nowo also you know what is going to happen tonight :33333\r\n");
     
+    start_efi_image(L"\\EFI\\BOOT\\SHELLX64.EFI");
+    hang();
 }

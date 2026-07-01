@@ -84,6 +84,7 @@ copy-to-usbroot:
 	mkdir -p usbroot/EFI/BOOT
 	cp build/EFIBench.efi usbroot/EFI/BOOT/BOOTX64.EFI
 	cp gnu-efi/Shell_Full.efi usbroot/EFI/BOOT/SHELLX64.EFI
+	cp -r data/* usbroot/
 
 #copy files to device
 copy-to-device:

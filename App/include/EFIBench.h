@@ -16,9 +16,22 @@ void menu_benchmarks();
 void menu_view_previous();
 void menu_settings();
 
+void* malloc(uint64_t bytes);
+void free(void* ptr);
 void clrscr();
 EFI_INPUT_KEY get_key();
 void set_color(uint64_t attrib);
 void hang();
+
+uint64_t strlen(char* str);
+uint64_t wstrlen(wchar_t* str);
+
+char* read_file(wchar_t* filepath, uint64_t* file_size_out);
+void write_file(wchar_t* filepath, void* buf);
+
+void start_efi_image(wchar_t* filepath);
+
+void test();
+
 
 #endif
