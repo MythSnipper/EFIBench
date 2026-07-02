@@ -25,9 +25,24 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
     return EFI_SUCCESS;
 }
 
-uint64_t run_selection_menu(wchar_t* title, wchar_t** entries, uint64_t entries_count, uint64_t selected){
+
+uint64_t run_selection_menu(wchar_t* title, wchar_t** entries_normal, boot_entry* entries_boot, uint64_t entries_count, uint64_t selected){
     //selected entry(index of entries)
     uint64_t selected_entry = selected;
+
+    //construct strings of entries
+    wchar_t** entries = malloc(sizeof(wchar_t*) * entries_count);
+    
+    if(entries_normal != NULL){
+        for(int i=0;i<entries_count;i++){
+            entries[i] = entries_normal[i];
+        }
+    }
+    if(entries_boot != NULL){
+        for(int i=0;i<entries_count;i++){
+            entries[i] = entries_boot[i].name;
+        }
+    }
 
     //Loop
     while(1){
@@ -75,7 +90,6 @@ uint64_t run_selection_menu(wchar_t* title, wchar_t** entries, uint64_t entries_
             draw_end_index = entries_count-1;
         }
 
-        
         //display entries from start index to end index, inclusive
         for(int i=draw_start_index;i<=draw_end_index;i++){
             //use highlight color if selected
@@ -137,7 +151,7 @@ void menu_main(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"EFIBench", entries, entries_count, selected);
+        selected = run_selection_menu(L"EFIBench", entries, NULL, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -162,40 +176,6 @@ void menu_main(){
 void menu_boot(){
     wchar_t* entries[] = {
         L"Back",
-        L"2",
-        L"3",
-        L"4",
-        L"5",
-        L"6",
-        L"7",
-        L"8",
-        L"9",
-        L"10",
-        L"11",
-        L"12",
-        L"13",
-        L"14",
-        L"15",
-        L"16",
-        L"17",
-        L"18",
-        L"19",
-        L"20",
-        L"21",
-        L"22",
-        L"23",
-        L"24",
-        L"25",
-        L"26",
-        L"27",
-        L"28",
-        L"29",
-        L"30",
-        L"31",
-        L"32",
-        L"33",
-        L"34",
-        L"end",
     };
     uint64_t entries_count = sizeof(entries)/sizeof(entries[0]);
     
@@ -203,7 +183,7 @@ void menu_boot(){
     uint64_t selected = 0;
     
     while(1){
-        selected = run_selection_menu(L"Boot Entries", entries, entries_count, selected);
+        selected = run_selection_menu(L"Boot Entries", entries, NULL, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -223,7 +203,7 @@ void menu_benchmarks(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"Benchmarks", entries, entries_count, selected);
+        selected = run_selection_menu(L"Benchmarks", entries, NULL, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -243,7 +223,7 @@ void menu_view_previous(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"View Previous Results", entries, entries_count, selected);
+        selected = run_selection_menu(L"View Previous Results", entries, NULL, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -263,7 +243,7 @@ void menu_settings(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"Settings", entries, entries_count, selected);
+        selected = run_selection_menu(L"Settings", entries, NULL, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -272,8 +252,6 @@ void menu_settings(){
         }
     }
 }
-
-
 
 //allocate bytes of contiguous memory
 void* malloc(uint64_t bytes){
@@ -315,36 +293,6 @@ void hang(){
         __asm__ volatile("hlt");
     }
 }
-
-//dead code that will be used when image loading
-/*
-
-
-    EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
-    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *Fs;
-    
-    gBS->OpenProtocol(
-        ImageHandle,
-        &gEfiLoadedImageProtocolGuid,
-        (VOID **)&LoadedImage,
-        ImageHandle,
-        NULL,
-        EFI_OPEN_PROTOCOL_GET_PROTOCOL
-    );
-    
-    gBS->OpenProtocol(
-        LoadedImage->DeviceHandle,
-        &gEfiSimpleFileSystemProtocolGuid,
-        (VOID **)&Fs,
-        ImageHandle,
-        NULL,
-        EFI_OPEN_PROTOCOL_GET_PROTOCOL
-    );
-
-
-
-
-*/
 
 //gets the length of a string
 uint64_t strlen(char* str){
@@ -497,18 +445,98 @@ void start_efi_image(wchar_t* filepath){
 }
 
 
+//converts a char string to wchar_t string
+void charstr_to_wcharstr(char* src, wchar_t* dst){
+    uint64_t i = 0;
+
+    while(src[i] != '\0'){
+        dst[i] = (wchar_t)src[i];
+        i++;
+    }
+    //add null terminator
+    dst[i] = L'\0';
+}
+
+//parse file data to entries, fill entries array, and return number of entries
+uint64_t parse_boot_entries(char* filedata, boot_entry** entries_ret){
+    uint64_t filedata_i = 0; //index of next character
+
+    boot_entry* entries = malloc(MAX_BOOT_ENTRIES * sizeof(boot_entry));
+    uint64_t entry_i = 0; //next entry to fill
+
+    
+    //do scan until file EOF or max entries filled
+    do{
+
+        char namebuf[MAX_BOOT_ENTRY_NAME_LEN + 1] = {0};
+        uint64_t namebuf_i = 0; //next index in namebuf
+
+        //scan until comma for name, not overflowing namebuf
+        while(filedata[filedata_i] != ',' && namebuf_i < MAX_BOOT_ENTRY_NAME_LEN){
+            namebuf[namebuf_i] = filedata[filedata_i];
+            namebuf_i++;
+            filedata_i++;
+        }
+
+        //skip until comma
+        while(filedata[filedata_i] != ',')filedata_i++;
+        //skip until no comma
+        while(filedata[filedata_i] == ',')filedata_i++;
+
+        char pathbuf[MAX_BOOT_ENTRY_PATH_LEN + 1] = {0};
+        uint64_t pathbuf_i = 0; //next index in pathbuf
+        //scan until comma for path, not overflowing pathbuf
+        while(filedata[filedata_i] != '\r' && filedata[filedata_i] != '\n' && pathbuf_i < MAX_BOOT_ENTRY_PATH_LEN){
+            pathbuf[pathbuf_i] = filedata[filedata_i];
+            pathbuf_i++;
+            filedata_i++;
+        }
+
+        //skip until new line
+        while(filedata[filedata_i] != '\r' && filedata[filedata_i] != '\n')filedata_i++;
+        //skip until no new line
+        while(filedata[filedata_i] == '\r' || filedata[filedata_i] == '\n')filedata_i++;
+
+        //now add the name and path to a new entry
+        
+        //convert to wide char strings
+        wchar_t namebuf_w[MAX_BOOT_ENTRY_NAME_LEN + 1] = {0};
+        wchar_t pathbuf_w[MAX_BOOT_ENTRY_PATH_LEN + 1] = {0};
+
+        charstr_to_wcharstr(namebuf, namebuf_w);
+        charstr_to_wcharstr(pathbuf, pathbuf_w);
+
+        //Print(L"Entry %d:\r\n%s,%s\r\n", entry_i+1, namebuf_w, pathbuf_w);
+
+        //now copy them to a new entry
+        StrCpy(entries[entry_i].name, namebuf_w);
+        StrCpy(entries[entry_i].path, pathbuf_w);
+
+        entry_i++;
+    } while(
+        filedata[filedata_i] != '\0' && //file did not reach EOF
+        entry_i < MAX_BOOT_ENTRIES //next entry is not invalid index
+    );
+
+    *entries_ret = entries;
+    return entry_i;
+}
+
 void test(){
-    UINTN size;
-    char* data = read_file(L"\\EFIBench\\meow.txt", &size);
+    uint64_t size;
+    char* data = read_file(L"\\EFIBench\\entries.txt", &size);
+
+    boot_entry* entries;
+    parse_boot_entries(data, &entries);
 
     if(data != NULL){
         Print(L"File size: %u bytes\r\n", size);
         Print(L"%a\r\n", data);
 
-        uefi_call_wrapper(BS->FreePool, 1, data);
+        free(data);
     }
 
-    write_file(L"\\vel.txt", "meowmeowmeow ily elena <3\r\nowo also you know what is going to happen tonight :33333\r\n");
+    write_file(L"\\testwrite.txt", "1234\r\n");
     
     start_efi_image(L"\\EFI\\BOOT\\SHELLX64.EFI");
     hang();
