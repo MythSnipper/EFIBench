@@ -73,8 +73,17 @@ clean:
 #build code into build directory
 build:
 	mkdir -p build
+	$(CC) $(CFLAGS) -c src/boot_entry_mgmt.c -o build/boot_entry_mgmt.o
+	$(CC) $(CFLAGS) -c src/efi_image.c -o build/efi_image.o
 	$(CC) $(CFLAGS) -c src/EFIBench.c -o build/EFIBench.o
-	$(LD) $(LDFLAGS) build/EFIBench.o -o build/EFIBench.so $(LDFLAGS_L)
+	$(CC) $(CFLAGS) -c src/filesystem.c -o build/filesystem.o
+	$(CC) $(CFLAGS) -c src/keyboard.c -o build/keyboard.o
+	$(CC) $(CFLAGS) -c src/mem.c -o build/mem.o
+	$(CC) $(CFLAGS) -c src/str.c -o build/str.o
+	$(CC) $(CFLAGS) -c src/ui.c -o build/ui.o
+	$(CC) $(CFLAGS) -c src/utils.c -o build/utils.o
+
+	$(LD) $(LDFLAGS) build/*.o -o build/EFIBench.so $(LDFLAGS_L)
 	$(STRIP) build/EFIBench.so
 	$(OCP) $(OCPFLAGS) build/EFIBench.so build/EFIBench.efi
 
