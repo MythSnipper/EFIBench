@@ -28,20 +28,24 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
 
 uint64_t run_selection_menu(wchar_t* title, wchar_t** entries_normal, boot_entry* entries_boot, uint64_t entries_count, uint64_t selected){
     //selected entry(index of entries)
-    uint64_t selected_entry = selected;
+    int64_t selected_entry = selected;
 
     //construct strings of entries
-    wchar_t** entries = malloc(sizeof(wchar_t*) * entries_count);
+    wchar_t** entries = NULL;
     
     if(entries_normal != NULL){
+        entries = malloc(sizeof(wchar_t*) * entries_count);
         for(int i=0;i<entries_count;i++){
             entries[i] = entries_normal[i];
         }
     }
     if(entries_boot != NULL){
+        entries = malloc(sizeof(wchar_t*) * (entries_count+1));
+        entries[0] = L"Back";
         for(int i=0;i<entries_count;i++){
-            entries[i] = entries_boot[i].name;
+            entries[i+1] = entries_boot[i].name;
         }
+        entries_count++;
     }
 
     //Loop
@@ -174,23 +178,31 @@ void menu_main(){
 }
 
 void menu_boot(){
-    wchar_t* entries[] = {
-        L"Back",
-    };
-    uint64_t entries_count = sizeof(entries)/sizeof(entries[0]);
-    
+    //read entries file
+    uint64_t size;
+    char* data = read_file(L"\\EFIBench\\entries.txt", &size);
+
+    boot_entry* entries;
+    uint64_t entries_count = parse_boot_entries(data, &entries);
+
     //make selected entry persistent so it doesn't start at the first one every time
     uint64_t selected = 0;
     
     while(1){
-        selected = run_selection_menu(L"Boot Entries", entries, NULL, entries_count, selected);
+        selected = run_selection_menu(L"Boot Entries", NULL, entries, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
-                return;
+                goto menu_boot_cleanup;
             break;
         }
+        //boot selected
+        start_efi_image(entries[selected-1].path);
     }
+
+    menu_boot_cleanup:
+    free(data);
+    free(entries);
 }
 
 void menu_benchmarks(){
@@ -408,6 +420,54 @@ void write_file(wchar_t* filepath, void* buf){
     uefi_call_wrapper(root->Close, 1, root);
 }
 
+//append a null terminated string to a file
+void append_file(wchar_t* filepath, void* buf){
+    EFI_STATUS status;
+
+    //get SFSP from UEFI
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* SFSP;
+    status = uefi_call_wrapper(BS->LocateProtocol, 3, &gEfiSimpleFileSystemProtocolGuid, NULL, (void**)&SFSP);
+    if(EFI_ERROR(status)){
+        Print(L"No SFSP\r\n");
+        hang();
+    }
+
+    EFI_FILE_PROTOCOL* root;
+    status = uefi_call_wrapper(SFSP->OpenVolume, 2, SFSP, &root);
+    if(EFI_ERROR(status)){
+        Print(L"No Volume\r\n");
+        hang();
+    }
+
+    EFI_FILE_PROTOCOL* file;
+    status = uefi_call_wrapper(root->Open, 5, root, &file, filepath, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
+    if(EFI_ERROR(status)){
+        Print(L"No File\r\n");
+        hang();
+    }
+
+    //set position to end of file
+    EFI_FILE_INFO* file_info = LibFileInfo(file);
+    uint64_t end_pos = file_info->FileSize;
+    status = uefi_call_wrapper(file->SetPosition, 2, file, end_pos);
+    if(EFI_ERROR(status)){
+        Print(L"No set position\r\n");
+        hang();
+    }
+
+
+    uint64_t filesize = strlen(buf);
+    status = uefi_call_wrapper(file->Write, 3, file, &filesize, buf);
+    if(EFI_ERROR(status)){
+        Print(L"No Write\r\n");
+        hang();
+    }
+
+    uefi_call_wrapper(file->Close, 1, file);
+    uefi_call_wrapper(root->Close, 1, root);
+}
+
+
 //load an image into memory and start it from the file path
 void start_efi_image(wchar_t* filepath){
     EFI_STATUS status;
@@ -522,21 +582,12 @@ uint64_t parse_boot_entries(char* filedata, boot_entry** entries_ret){
     return entry_i;
 }
 
+
+
+
 void test(){
-    uint64_t size;
-    char* data = read_file(L"\\EFIBench\\entries.txt", &size);
 
-    boot_entry* entries;
-    parse_boot_entries(data, &entries);
-
-    if(data != NULL){
-        Print(L"File size: %u bytes\r\n", size);
-        Print(L"%a\r\n", data);
-
-        free(data);
-    }
-
-    write_file(L"\\testwrite.txt", "1234\r\n");
+    append_file(L"\\testwrite.txt", "1234\r\n");
     
     start_efi_image(L"\\EFI\\BOOT\\SHELLX64.EFI");
     hang();
