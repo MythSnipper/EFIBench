@@ -25,28 +25,13 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
     return EFI_SUCCESS;
 }
 
-
-uint64_t run_selection_menu(wchar_t* title, wchar_t** entries_normal, boot_entry* entries_boot, uint64_t entries_count, uint64_t selected){
+uint64_t run_selection_menu(wchar_t* title, wchar_t** entries, uint64_t entries_count, uint64_t selected){
+    if (entries_count == 0) {
+        return 0;
+    }
+    
     //selected entry(index of entries)
     int64_t selected_entry = selected;
-
-    //construct strings of entries
-    wchar_t** entries = NULL;
-    
-    if(entries_normal != NULL){
-        entries = malloc(sizeof(wchar_t*) * entries_count);
-        for(int i=0;i<entries_count;i++){
-            entries[i] = entries_normal[i];
-        }
-    }
-    if(entries_boot != NULL){
-        entries = malloc(sizeof(wchar_t*) * (entries_count+1));
-        entries[0] = L"Back";
-        for(int i=0;i<entries_count;i++){
-            entries[i+1] = entries_boot[i].name;
-        }
-        entries_count++;
-    }
 
     //Loop
     while(1){
@@ -141,6 +126,73 @@ uint64_t run_selection_menu(wchar_t* title, wchar_t** entries_normal, boot_entry
 
 }
 
+//entries count does not include Back and Edit
+uint64_t run_selection_menu_boot(wchar_t* title, boot_entry* entries_boot, uint64_t entries_count, uint64_t selected){
+    //selected entry(index of entries)
+    int64_t selected_entry = selected;
+
+    //construct strings of entries
+    wchar_t** entries = NULL;
+    entries = malloc(sizeof(wchar_t*) * (entries_count+3));
+    entries[0] = L"Back";
+    entries[1] = L"Add Entry";
+    entries[2] = L"Remove Entry";
+    for(int i=0;i<entries_count;i++){
+        entries[i+3] = entries_boot[i].name;
+    }
+    entries_count += 3;
+
+    uint64_t ret = run_selection_menu(title, entries, entries_count, selected);
+
+    free(entries);
+
+    return ret;
+}
+
+wchar_t* run_prompt(wchar_t* prompt, uint64_t max_len, bool* quit){
+    wchar_t* ret = malloc(sizeof(wchar_t) * (max_len+1));
+    ret[0] = L'\0';
+    uint64_t ret_i = 0;
+
+    *quit = false;
+
+    while(1){
+        clrscr();
+        Print(L"%s", prompt);
+        Print(L"%s", ret);
+
+        set_cursor_pos(0, 24);
+        Print(L"Enter to confirm, Esc to go back");
+        EFI_INPUT_KEY key = get_key();
+
+        if(key.UnicodeChar == '\r'){ //enter
+            return ret;
+        }
+        if(key.ScanCode == SCAN_ESC){ //esc
+            *quit = true;
+            free(ret);
+            return NULL;
+        }
+        if(key.UnicodeChar == L'\b'){ //backspace
+            if(ret_i > 0){
+                ret_i--;
+                ret[ret_i] = L'\0';
+            }
+            continue;
+        }
+        if(ret_i < max_len && 
+            key.UnicodeChar != 0 &&
+            key.UnicodeChar >= 32 &&
+            key.UnicodeChar != 127 &&
+            key.UnicodeChar != L','){
+
+            ret[ret_i] = key.UnicodeChar;
+            ret_i++;
+            ret[ret_i] = L'\0';
+        }
+    }
+}
+
 void menu_main(){
     wchar_t* entries[] = {
         L"Boot Entries",
@@ -155,7 +207,7 @@ void menu_main(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"EFIBench", entries, NULL, entries_count, selected);
+        selected = run_selection_menu(L"EFIBench", entries, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -189,18 +241,135 @@ void menu_boot(){
     uint64_t selected = 0;
     
     while(1){
-        selected = run_selection_menu(L"Boot Entries", NULL, entries, entries_count, selected);
+        selected = run_selection_menu_boot(L"Boot Entries", entries, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
-                goto menu_boot_cleanup;
+                free(data);
+                free(entries);
+                return;
             break;
+            case 1:
+                menu_boot_edit_add();
+                free(data);
+                free(entries);
+                data = read_file(L"\\EFIBench\\entries.txt", &size);
+                entries_count = parse_boot_entries(data, &entries);
+            break;
+            case 2:
+                menu_boot_edit_remove();
+                free(data);
+                free(entries);
+                data = read_file(L"\\EFIBench\\entries.txt", &size);
+                entries_count = parse_boot_entries(data, &entries);
+            break;
+            default:
+                start_efi_image(entries[selected-3].path);
         }
-        //boot selected
-        start_efi_image(entries[selected-1].path);
+    }
+}
+
+void menu_boot_edit_add(){
+    //read entries file
+    uint64_t size;
+    char* data = read_file(L"\\EFIBench\\entries.txt", &size);
+
+    boot_entry* entries;
+    uint64_t entries_count = parse_boot_entries(data, &entries);
+
+    //prompt enter for name and path
+    bool quit;
+    
+    wchar_t* name;
+    name = run_prompt(L"Name for new boot entry\r\n> ", MAX_BOOT_ENTRY_NAME_LEN, &quit);
+    if(quit){
+        free(data);
+        free(entries);
+        return;
     }
 
-    menu_boot_cleanup:
+    wchar_t* path;
+    path = run_prompt(L"Path for new boot entry\r\n> ", MAX_BOOT_ENTRY_PATH_LEN, &quit);
+    if(quit){
+        free(name);
+        free(data);
+        free(entries);
+        return;
+    }
+
+
+    //add new entry & inc entries_count
+    boot_entry* new_entries = malloc(sizeof(boot_entry) * (entries_count+1));
+    for(int i=0;i<entries_count;i++){
+        new_entries[i] = entries[i];
+    }
+    free(entries);
+    entries = new_entries;
+    
+    StrCpy(entries[entries_count].name, name);
+    StrCpy(entries[entries_count].path, path);
+
+    entries_count++;
+
+    //construct string
+    // :3
+    char* file_content = malloc(1);
+    *file_content = '\0';
+    char* tmp;
+    {
+        //first get the name and the path and convert them to char*
+        char* name = malloc(MAX_BOOT_ENTRY_NAME_LEN+1);
+        wcharstr_to_charstr(entries[entries_count-1].name, name);
+
+        char* path = malloc(MAX_BOOT_ENTRY_PATH_LEN+1);
+        wcharstr_to_charstr(entries[entries_count-1].path, path);
+
+        tmp = StrAppend(file_content, name);
+        free(file_content);
+        free(name);
+        file_content = tmp;
+
+        tmp = StrAppend(file_content, ",");
+        free(file_content);
+        file_content = tmp;
+
+        tmp = StrAppend(file_content, path);
+        free(file_content);
+        free(path);
+        file_content = tmp;
+
+        tmp = StrAppend(file_content, "\r\n");
+        free(file_content);
+        file_content = tmp;
+    }
+    //append entry to file
+    append_file(ENTRIES_FILE_PATH, file_content);
+
+    free(file_content);
+    free(name);
+    free(path);
+    free(data);
+    free(entries);
+}
+
+void menu_boot_edit_remove(){
+    //read entries file
+    uint64_t size;
+    char* data = read_file(ENTRIES_FILE_PATH, &size);
+
+    boot_entry* entries;
+    uint64_t entries_count = parse_boot_entries(data, &entries);
+
+    //construct wchar_t** necessary for normal selection menu
+
+
+    //select entry
+
+
+
+    //delete selected entry
+
+
     free(data);
     free(entries);
 }
@@ -215,7 +384,7 @@ void menu_benchmarks(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"Benchmarks", entries, NULL, entries_count, selected);
+        selected = run_selection_menu(L"Benchmarks", entries, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -235,7 +404,7 @@ void menu_view_previous(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"View Previous Results", entries, NULL, entries_count, selected);
+        selected = run_selection_menu(L"View Previous Results", entries, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -255,7 +424,7 @@ void menu_settings(){
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"Settings", entries, NULL, entries_count, selected);
+        selected = run_selection_menu(L"Settings", entries, entries_count, selected);
         //go to another menu
         switch(selected){
             case 0:
@@ -271,6 +440,10 @@ void* malloc(uint64_t bytes){
     EFI_STATUS status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, bytes, &buf);
     if(EFI_ERROR(status)){
         return NULL;
+    }
+    if(buf == NULL){
+        Print(L"malloc OOM\r\n");
+        hang();
     }
     return buf;
 }
@@ -298,6 +471,11 @@ EFI_INPUT_KEY get_key(){
 void set_color(uint64_t attrib){
     //set color attribute
     uefi_call_wrapper(ST->ConOut->SetAttribute, 2, ST->ConOut, attrib);
+}
+//set cursor position to (x, y), where (0, 0) is top left
+void set_cursor_pos(uint64_t x, uint64_t y){
+    //uefi call
+    uefi_call_wrapper(ST->ConOut->SetCursorPosition, 3, ST->ConOut, x, y);
 }
 //hangs the cpu on low power without ACPI shenanigans indefinitely
 void hang(){
@@ -327,6 +505,26 @@ uint64_t wstrlen(wchar_t* str){
     return len;
 }
 
+//mallocs a new string which is the concatenation of the two strings
+char* StrAppend(char* a, char* b){
+    char* newstr = malloc(strlen(a)+strlen(b)+1);
+    uint64_t vel = 0;
+
+    while(*a != '\0'){
+        newstr[vel] = *a;
+        vel++;
+        a++;
+    }
+    while(*b != '\0'){
+        newstr[vel] = *b;
+        vel++;
+        b++;
+    }
+    newstr[vel] = '\0';
+
+    return newstr;
+}
+
 //reads a file from its file path and returns a pointer to the start
 char* read_file(wchar_t* filepath, uint64_t* file_size_out){
 
@@ -350,6 +548,7 @@ char* read_file(wchar_t* filepath, uint64_t* file_size_out){
     EFI_FILE_PROTOCOL* file;
     status = uefi_call_wrapper(root->Open, 5, root, &file, filepath, EFI_FILE_MODE_READ, 0);
     if(EFI_ERROR(status)){
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No File\r\n");
         hang();
     }
@@ -357,6 +556,8 @@ char* read_file(wchar_t* filepath, uint64_t* file_size_out){
     //get file size
     EFI_FILE_INFO* file_info = LibFileInfo(file);
     if(file_info == NULL){
+        uefi_call_wrapper(file->Close, 1, file);
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No file info\r\n");
         hang();
     }
@@ -367,6 +568,9 @@ char* read_file(wchar_t* filepath, uint64_t* file_size_out){
     uint64_t read_size = file_size;
     status = uefi_call_wrapper(file->Read, 3, file, &read_size, buf);
     if(EFI_ERROR(status)){
+        free(buf);
+        uefi_call_wrapper(file->Close, 1, file);
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No Read\r\n");
         hang();
     }
@@ -405,6 +609,7 @@ void write_file(wchar_t* filepath, void* buf){
     EFI_FILE_PROTOCOL* file;
     status = uefi_call_wrapper(root->Open, 5, root, &file, filepath, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
     if(EFI_ERROR(status)){
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No File\r\n");
         hang();
     }
@@ -412,6 +617,8 @@ void write_file(wchar_t* filepath, void* buf){
     uint64_t filesize = strlen(buf);
     status = uefi_call_wrapper(file->Write, 3, file, &filesize, buf);
     if(EFI_ERROR(status)){
+        uefi_call_wrapper(file->Close, 1, file);
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No Write\r\n");
         hang();
     }
@@ -442,15 +649,25 @@ void append_file(wchar_t* filepath, void* buf){
     EFI_FILE_PROTOCOL* file;
     status = uefi_call_wrapper(root->Open, 5, root, &file, filepath, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
     if(EFI_ERROR(status)){
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No File\r\n");
         hang();
     }
 
     //set position to end of file
     EFI_FILE_INFO* file_info = LibFileInfo(file);
+    if(file_info == NULL){
+        uefi_call_wrapper(file->Close, 1, file);
+        uefi_call_wrapper(root->Close, 1, root);
+        Print(L"No file info\r\n");
+        hang();
+    }
+
     uint64_t end_pos = file_info->FileSize;
     status = uefi_call_wrapper(file->SetPosition, 2, file, end_pos);
     if(EFI_ERROR(status)){
+        uefi_call_wrapper(file->Close, 1, file);
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No set position\r\n");
         hang();
     }
@@ -459,6 +676,8 @@ void append_file(wchar_t* filepath, void* buf){
     uint64_t filesize = strlen(buf);
     status = uefi_call_wrapper(file->Write, 3, file, &filesize, buf);
     if(EFI_ERROR(status)){
+        uefi_call_wrapper(file->Close, 1, file);
+        uefi_call_wrapper(root->Close, 1, root);
         Print(L"No Write\r\n");
         hang();
     }
@@ -466,7 +685,6 @@ void append_file(wchar_t* filepath, void* buf){
     uefi_call_wrapper(file->Close, 1, file);
     uefi_call_wrapper(root->Close, 1, root);
 }
-
 
 //load an image into memory and start it from the file path
 void start_efi_image(wchar_t* filepath){
@@ -492,7 +710,7 @@ void start_efi_image(wchar_t* filepath){
     EFI_HANDLE image_handle;
     status = uefi_call_wrapper(BS->LoadImage, 6, false, IH, image_path, NULL, 0, &image_handle);
     if(EFI_ERROR(status)){
-        Print(L"No Load Image\r\n");
+        Print(L"No Load Image\r\n %r\r\n %s\r\n", status, filepath);
         hang();
     }
 
@@ -503,7 +721,6 @@ void start_efi_image(wchar_t* filepath){
         hang();
     }
 }
-
 
 //converts a char string to wchar_t string
 void charstr_to_wcharstr(char* src, wchar_t* dst){
@@ -517,7 +734,19 @@ void charstr_to_wcharstr(char* src, wchar_t* dst){
     dst[i] = L'\0';
 }
 
-//parse file data to entries, fill entries array, and return number of entries
+//converts a wchar_t string to char string
+void wcharstr_to_charstr(wchar_t* src, char* dst){
+    uint64_t i = 0;
+
+    while(src[i] != L'\0'){
+        dst[i] = (char)src[i];
+        i++;
+    }
+    //add null terminator
+    dst[i] = '\0';
+}
+
+//parse file data to entries, fill entries array, and return number of entries, entries is malloced
 uint64_t parse_boot_entries(char* filedata, boot_entry** entries_ret){
     uint64_t filedata_i = 0; //index of next character
 
@@ -582,13 +811,6 @@ uint64_t parse_boot_entries(char* filedata, boot_entry** entries_ret){
     return entry_i;
 }
 
-
-
-
 void test(){
-
-    append_file(L"\\testwrite.txt", "1234\r\n");
-    
-    start_efi_image(L"\\EFI\\BOOT\\SHELLX64.EFI");
-    hang();
+    Print(L"TEST");
 }
