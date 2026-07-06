@@ -1,5 +1,5 @@
-#ifndef BOOT_ENTRY_MGMT_H
-#define BOOT_ENTRY_MGMT_H
+#ifndef BOOTMGMT_H
+#define BOOTMGMT_H
 
 #include <efi.h>
 #include <efilib.h>

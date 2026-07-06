@@ -1,4 +1,4 @@
-#include <boot_entry_mgmt.h>
+#include <bootmgmt.h>
 
 //parse file data to entries, fill entries array, and return number of entries, entries is malloced
 uint64_t parse_boot_entries(char* filedata, boot_entry** entries_ret){

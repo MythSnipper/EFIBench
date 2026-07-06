@@ -349,7 +349,8 @@ void menu_boot_edit_remove(){
 
 void menu_benchmarks(){
     wchar_t* entries[] = {
-        L"Back"
+        L"Back",
+        L"Benchmark"
     };
     uint64_t entries_count = sizeof(entries)/sizeof(entries[0]);
 
@@ -362,6 +363,9 @@ void menu_benchmarks(){
         switch(selected){
             case 0:
                 return;
+            break;
+            case 1:
+                benchmark_run();
             break;
         }
     }
@@ -389,7 +393,7 @@ void menu_view_previous(){
 
 void menu_settings(){
     wchar_t* entries[] = {
-        L"Back"
+        L"Back",
     };
     uint64_t entries_count = sizeof(entries)/sizeof(entries[0]);
 
@@ -406,8 +410,6 @@ void menu_settings(){
         }
     }
 }
-
-
 
 
 

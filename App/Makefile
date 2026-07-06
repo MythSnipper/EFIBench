@@ -60,9 +60,12 @@ OCPFLAGS = \
 	--subsystem=10
 
 
-debug: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu
+debug: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-debug
 
-run: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-kvm
+test: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-kvm
+test2: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu
+
+run: givesudo qemu-kvm
 
 givesudo:
 	sudo echo give me sudo
@@ -73,15 +76,17 @@ clean:
 #build code into build directory
 build:
 	mkdir -p build
-	$(CC) $(CFLAGS) -c src/boot_entry_mgmt.c -o build/boot_entry_mgmt.o
+	$(CC) $(CFLAGS) -c src/bootmgmt.c -o build/bootmgmt.o
 	$(CC) $(CFLAGS) -c src/efi_image.c -o build/efi_image.o
-	$(CC) $(CFLAGS) -c src/EFIBench.c -o build/EFIBench.o
+	$(CC) $(CFLAGS) -c src/main.c -o build/main.o
 	$(CC) $(CFLAGS) -c src/filesystem.c -o build/filesystem.o
 	$(CC) $(CFLAGS) -c src/keyboard.c -o build/keyboard.o
 	$(CC) $(CFLAGS) -c src/mem.c -o build/mem.o
 	$(CC) $(CFLAGS) -c src/str.c -o build/str.o
 	$(CC) $(CFLAGS) -c src/ui.c -o build/ui.o
 	$(CC) $(CFLAGS) -c src/utils.c -o build/utils.o
+	$(CC) $(CFLAGS) -c src/pcspkr.c -o build/pcspkr.o
+	$(CC) $(CFLAGS) -c src/benchmark.c -o build/benchmark.o
 
 	$(LD) $(LDFLAGS) build/*.o -o build/EFIBench.so $(LDFLAGS_L)
 	$(STRIP) build/EFIBench.so
@@ -119,8 +124,22 @@ qemu-kvm:
 		-usb -device usb-storage,drive=nuckusb \
 		-drive file=$(DEVICE),if=none,format=raw,id=nuckusb
 
-#test in qemu(software emulated, pause on start, needs gdb)
+#slower qemu
 qemu:
+	sudo sync
+	sudo -E qemu-system-x86_64 \
+		-accel tcg,thread=single \
+		-smp 1 \
+		-icount shift=10 \
+		-m 8192 \
+		-net none \
+		-drive if=pflash,format=raw,unit=0,file=ovmf/temp/$(QEMU_UEFI_CODE),readonly=on \
+		-drive if=pflash,format=raw,unit=1,file=ovmf/temp/$(QEMU_UEFI_VARS) \
+		-usb -device usb-storage,drive=nuckusb \
+		-drive file=$(DEVICE),if=none,format=raw,id=nuckusb
+
+#test in qemu(software emulated, pause on start, needs gdb)
+qemu-debug:
 	sudo sync
 	sudo -E qemu-system-x86_64 \
 		-accel tcg \

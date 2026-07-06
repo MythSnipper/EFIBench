@@ -5,12 +5,13 @@
 #include <efilib.h>
 #include <stdbool.h>
 
-#include <boot_entry_mgmt.h>
+#include <bootmgmt.h>
 #include <utils.h>
 #include <keyboard.h>
 #include <filesystem.h>
 #include <efi_image.h>
-
+#include <pcspkr.h>
+#include <benchmark.h>
 
 
 
