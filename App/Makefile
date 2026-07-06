@@ -66,6 +66,7 @@ test: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-kvm
 test2: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu
 
 run: givesudo qemu-kvm
+run2: givesudo qemu
 
 givesudo:
 	sudo echo give me sudo
@@ -86,7 +87,10 @@ build:
 	$(CC) $(CFLAGS) -c src/ui.c -o build/ui.o
 	$(CC) $(CFLAGS) -c src/utils.c -o build/utils.o
 	$(CC) $(CFLAGS) -c src/pcspkr.c -o build/pcspkr.o
-	$(CC) $(CFLAGS) -c src/benchmark.c -o build/benchmark.o
+	$(CC) $(CFLAGS) -c src/cpu.c -o build/cpu.o
+
+#no optimizations
+	$(CC) $(CFLAGS) -fno-unroll-loops -fno-peel-loops -fno-unswitch-loops -c src/benchmark.c -o build/benchmark.o
 
 	$(LD) $(LDFLAGS) build/*.o -o build/EFIBench.so $(LDFLAGS_L)
 	$(STRIP) build/EFIBench.so
