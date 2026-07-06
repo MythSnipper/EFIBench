@@ -3,7 +3,7 @@
 DEVICE ?= /dev/null
 
 #part to install on
-EFI_PART ?= $(DEVICE)p1
+EFI_PART ?= $(DEVICE)1
 
 #UEFI files for QEMU
 QEMU_UEFI_CODE = OVMF_CODE.fd
@@ -88,9 +88,10 @@ build:
 	$(CC) $(CFLAGS) -c src/utils.c -o build/utils.o
 	$(CC) $(CFLAGS) -c src/pcspkr.c -o build/pcspkr.o
 	$(CC) $(CFLAGS) -c src/cpu.c -o build/cpu.o
+	$(CC) $(CFLAGS) -c src/timer.c -o build/timer.o
 
 #no optimizations
-	$(CC) $(CFLAGS) -fno-unroll-loops -fno-peel-loops -fno-unswitch-loops -c src/benchmark.c -o build/benchmark.o
+	$(CC) $(CFLAGS) -fno-unroll-loops -fno-peel-loops -fno-unswitch-loops -fno-tree-vectorize -c src/benchmark.c -o build/benchmark.o
 
 	$(LD) $(LDFLAGS) build/*.o -o build/EFIBench.so $(LDFLAGS_L)
 	$(STRIP) build/EFIBench.so

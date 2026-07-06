@@ -6,9 +6,17 @@ char* read_file(wchar_t* filepath, uint64_t* file_size_out){
 
     EFI_STATUS status;
 
-    //get SFSP from UEFI
+    //get LoadedImageProtocol
+    EFI_LOADED_IMAGE_PROTOCOL* LIP;
+    status = uefi_call_wrapper(BS->HandleProtocol, 3, IH, &gEfiLoadedImageProtocolGuid, (void**)&LIP);
+    if(EFI_ERROR(status)){
+        Print(L"No LoadedImageProtocol\r\n");
+        hang();
+    }
+
+    //Now get the correct SFSP corresponding to where the current image is located
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* SFSP;
-    status = uefi_call_wrapper(BS->LocateProtocol, 3, &gEfiSimpleFileSystemProtocolGuid, NULL, (void**)&SFSP);
+    status = uefi_call_wrapper(BS->HandleProtocol, 3, LIP->DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, (void**)&SFSP);
     if(EFI_ERROR(status)){
         Print(L"No SFSP\r\n");
         hang();

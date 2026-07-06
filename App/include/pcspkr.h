@@ -5,7 +5,7 @@
 #include <efilib.h>
 #include <stdbool.h>
 
-#include <utils.h>
+#include <cpu.h>
 
 
 void pcspkr_tone(uint64_t hz);
