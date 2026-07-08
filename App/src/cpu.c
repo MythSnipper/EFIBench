@@ -11,11 +11,11 @@ bool cpu_has_avx(){
     cpuid(1, 0, &eax, &ebx, &ecx, &edx);
 
     //do checks for AVX and OSXSAVE 
-    bool avx = (ecx & (1U << 28)) != 0;
+    bool avx = (ecx & (1 << 28)) != 0;
+    bool osxsave = (ecx & (1 << 27)) != 0;
+    bool sxsave = (ecx & (1 << 26)) != 0;
 
-    bool osxsave = (ecx & (1U << 27)) != 0;
-
-    if(!avx || !osxsave){
+    if(!avx || !osxsave || !sxsave){
         return false;
     }
 
@@ -25,8 +25,54 @@ bool cpu_has_avx(){
     return (xcr0 & 0x6) == 0x6;
 }
 
+bool cpu_has_avx2(){
+    uint32_t eax, ebx, ecx, edx;
+
+    if(!cpu_has_avx()){
+        return false;
+    }
+
+    cpuid(0, 0, &eax, &ebx, &ecx, &edx);
+    if(eax < 7){
+        return false;
+    }
+
+    cpuid(7, 0, &eax, &ebx, &ecx, &edx);
+    return (ebx & (1 << 5)) != 0;
+}
+
+bool cpu_has_sse(){
+    uint32_t eax, ebx, ecx, edx;
+    cpuid(1, 0, &eax, &ebx, &ecx, &edx);
+    return (edx & (1 << 25)) != 0;
+}
+
 bool cpu_has_sse2(){
     uint32_t eax, ebx, ecx, edx;
     cpuid(1, 0, &eax, &ebx, &ecx, &edx);
     return (edx & (1 << 26)) != 0;
+}
+
+
+void cpu_get_model(char* model){
+    uint32_t eax, ebx, ecx, edx;
+    cpuid(0x80000000, 0, &eax, &ebx, &ecx, &edx);
+
+    //check if model string available
+    if(eax < 0x80000004){
+        model[0] = '\0';
+    }
+
+    uint32_t* dst = (uint32_t*)model;
+    //copy from model leaf to string
+    for(uint64_t leaf=0x80000002;leaf<=0x80000004;leaf++){
+        cpuid(leaf, 0, &eax, &ebx, &ecx, &edx);
+        *dst++ = eax;
+        *dst++ = ebx;
+        *dst++ = ecx;
+        *dst++ = edx;
+    }
+
+    model[48] = '\0';
+
 }

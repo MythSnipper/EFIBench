@@ -5,6 +5,18 @@
 #include <efilib.h>
 #include <stdbool.h>
 
+
+
+
+bool cpu_has_aes();
+bool cpu_has_avx();
+bool cpu_has_avx2();
+bool cpu_has_sse();
+bool cpu_has_sse2();
+
+void cpu_get_model(char* model);
+
+
 //use CPUID to get cpu features
 static inline void cpuid(uint32_t leaf, uint32_t subleaf, uint32_t* eax, uint32_t* ebx, uint32_t* ecx, uint32_t* edx){
     __asm__ volatile(

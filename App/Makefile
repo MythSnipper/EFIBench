@@ -3,7 +3,8 @@
 DEVICE ?= /dev/null
 
 #part to install on
-EFI_PART ?= $(DEVICE)1
+p ?=
+EFI_PART ?= $(DEVICE)$(p)1
 
 #UEFI files for QEMU
 QEMU_UEFI_CODE = OVMF_CODE.fd
