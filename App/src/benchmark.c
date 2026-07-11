@@ -993,7 +993,7 @@ double avx2_intadd_benchmark(uint64_t ops, double tsc_freq_hz){
 
     return (ops << 5) / ((after-prev)/tsc_freq_hz);
 }
-double avx2_i32sub_benchmark(uint64_t ops, double tsc_freq_hz){
+double avx2_intsub_benchmark(uint64_t ops, double tsc_freq_hz){
     ops >>= 5; //div by 32
     __asm__ volatile(
         ".intel_syntax noprefix\n"
@@ -1028,7 +1028,7 @@ double avx2_i32sub_benchmark(uint64_t ops, double tsc_freq_hz){
 
     return (ops << 5) / ((after-prev)/tsc_freq_hz);
 }
-double avx2_i32mul_benchmark(uint64_t ops, double tsc_freq_hz){
+double avx2_intmul_benchmark(uint64_t ops, double tsc_freq_hz){
     ops >>= 5; //div by 32
     __asm__ volatile(
         ".intel_syntax noprefix\n"
@@ -1063,7 +1063,7 @@ double avx2_i32mul_benchmark(uint64_t ops, double tsc_freq_hz){
 
     return (ops << 5) / ((after-prev)/tsc_freq_hz);
 }
-double avx2_logic_benchmark(uint64_t ops, double tsc_freq_hz){
+double avx2_intlogic_benchmark(uint64_t ops, double tsc_freq_hz){
     ops >>= 5; //div by 32
     __asm__ volatile(
         ".intel_syntax noprefix\n"
@@ -1213,10 +1213,12 @@ double mcopy_benchmark(uint64_t bufsize, double tsc_freq_hz){
     return (target * sizeof(uint64_t)) / ((after-prev)/tsc_freq_hz);
 }
 
-
-
 void benchmark_run(){
     clrscr();
+    //result struct for saving(or not saving) results
+    benchmark_result result = {0};
+
+    EFI_TIME timestamp = getTime();
 
     //SETTINGS for benchmarks
     //ms
@@ -1242,34 +1244,47 @@ void benchmark_run(){
     aes_ops *= 1000000;
     mem_bufsize *= 1000000;
 
-    bool has_sse, has_sse2, has_avx, has_avx2, has_aes;
+    bool has_sse, has_sse2, has_avx, has_avx2, has_usable_avx, has_aes;
     char model[49];
 
-    wchar_t* yes = L"Yes";
-    wchar_t* no = L"No";
+    wchar_t* yes = L"Supported";
+    wchar_t* no = L"Unsupported";
     
     has_sse = cpu_has_sse();
+    result.has_sse = has_sse;
     has_sse2 = cpu_has_sse2();
+    result.has_sse2 = has_sse2;
     has_avx = cpu_has_avx();
+    result.has_avx = has_avx;
     has_avx2 = cpu_has_avx2();
+    result.has_avx2 = has_avx2;
+    has_usable_avx = cpu_avx_usable();
+    result.avx_usable = has_usable_avx;
     has_aes = cpu_has_aes();
+    result.has_aes = has_aes;
 
     cpu_get_model(model);
+    for(int i=0;i<48;i++){
+        result.model[i] = model[i];
+    }
 
     Print(L"CPU Model: %a\r\n", model);
     Print(L"CPU Features:\r\n");
     Print(L"SSE: %s\r\n", has_sse ? yes : no);
     Print(L"SSE2: %s\r\n", has_sse2 ? yes : no);
-    Print(L"AVX: %s\r\n", has_avx ? yes : no);
-    Print(L"AVX2: %s\r\n", has_avx2 ? yes : no);
+    Print(L"AVX: %s, %s\r\n", has_avx ? yes : no, has_usable_avx ? L"Enabled" : L"Disabled");
+    Print(L"AVX2: %s, %s\r\n", has_avx2 ? yes : no, has_usable_avx ? L"Enabled" : L"Disabled");
     Print(L"AES: %s\r\n", has_aes ? yes : no);
 
     Print(L"\r\nPress any key to continue...\r\n");
     get_key();
     clrscr();
 
+    uint64_t t_before = rdtsc();
+
     Print(L"TSC Frequency: ");
     double tsc_f = measure_tsc_freq(tsc_test_ms);
+    result.tsc_frequency = tsc_f;
     Print(L"%f MHz\r\n", tsc_f/1000000.0);
 
     double run1, run2, run3, avg;
@@ -1290,7 +1305,8 @@ void benchmark_run(){
     run2 = intadd_benchmark(addsub_ops, tsc_f);
     run3 = intadd_benchmark(addsub_ops, tsc_f);
     avg = (run1+run2+run3)/3.0;
-    Print(L"%f Mop/s", avg/1000000.0);
+    result.int_add = avg;
+    Print(L"%f MOP/s", avg/1000000.0);
 
     set_cursor_pos(cursor_x, cursor_y);
     Print(L"ALU SUB: ");
@@ -1299,7 +1315,8 @@ void benchmark_run(){
     run2 = intsub_benchmark(addsub_ops, tsc_f);
     run3 = intsub_benchmark(addsub_ops, tsc_f);
     avg = (run1+run2+run3)/3.0;
-    Print(L"%f Mop/s\r\n", avg/1000000.0);
+    result.int_sub = avg;
+    Print(L"%f MOP/s\r\n", avg/1000000.0);
     cursor_y++;
 
     Print(L"ALU MUL: ");
@@ -1308,7 +1325,8 @@ void benchmark_run(){
     run2 = intmul_benchmark(muldiv_ops, tsc_f);
     run3 = intmul_benchmark(muldiv_ops, tsc_f);
     avg = (run1+run2+run3)/3.0;
-    Print(L"%f Mop/s", avg/1000000.0);
+    result.int_mul = avg;
+    Print(L"%f MOP/s", avg/1000000.0);
 
     set_cursor_pos(cursor_x, cursor_y);
     Print(L"ALU DIV: ");
@@ -1317,7 +1335,8 @@ void benchmark_run(){
     run2 = intdiv_benchmark(muldiv_ops, tsc_f);
     run3 = intdiv_benchmark(muldiv_ops, tsc_f);
     avg = (run1+run2+run3)/3.0;
-    Print(L"%f Mop/s\r\n", avg/1000000.0);
+    result.int_div = avg;
+    Print(L"%f MOP/s\r\n", avg/1000000.0);
     cursor_y++;
 
     Print(L"ALU LOGIC: ");
@@ -1326,7 +1345,8 @@ void benchmark_run(){
     run2 = bit_benchmark(logic_ops, tsc_f);
     run3 = bit_benchmark(logic_ops, tsc_f);
     avg = (run1+run2+run3)/3.0;
-    Print(L"%f Mop/s\r\n", avg/1000000.0);
+    result.int_logic = avg;
+    Print(L"%f MOP/s\r\n", avg/1000000.0);
     cursor_y++;
 
     //ALL FLOAT TESTS
@@ -1338,7 +1358,8 @@ void benchmark_run(){
         run2 = f32add_benchmark(faddsub_ops, tsc_f);
         run3 = f32add_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.f32_add = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"FPU FLOAT SUB: ");
@@ -1347,7 +1368,8 @@ void benchmark_run(){
         run2 = f32sub_benchmark(faddsub_ops, tsc_f);
         run3 = f32sub_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.f32_sub = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
         Print(L"FPU FLOAT MUL: ");
@@ -1356,7 +1378,8 @@ void benchmark_run(){
         run2 = f32mul_benchmark(fmuldiv_ops, tsc_f);
         run3 = f32mul_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.f32_mul = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"FPU FLOAT DIV: ");
@@ -1365,7 +1388,8 @@ void benchmark_run(){
         run2 = f32div_benchmark(fmuldiv_ops, tsc_f);
         run3 = f32div_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.f32_div = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
 
@@ -1376,7 +1400,8 @@ void benchmark_run(){
         run2 = sse_f32add_benchmark(faddsub_ops, tsc_f);
         run3 = sse_f32add_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.p32_add = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"SIMD FLOAT SUB: ");
@@ -1385,7 +1410,8 @@ void benchmark_run(){
         run2 = sse_f32sub_benchmark(faddsub_ops, tsc_f);
         run3 = sse_f32sub_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.p32_sub = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
         Print(L"SIMD FLOAT MUL: ");
@@ -1394,7 +1420,8 @@ void benchmark_run(){
         run2 = sse_f32mul_benchmark(fmuldiv_ops, tsc_f);
         run3 = sse_f32mul_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.p32_mul = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"SIMD FLOAT DIV: ");
@@ -1403,14 +1430,15 @@ void benchmark_run(){
         run2 = sse_f32div_benchmark(fmuldiv_ops, tsc_f);
         run3 = sse_f32div_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.p32_div = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
     }
     else{
         Print(L"SSE Unsupported, skipping FPU FLOAT tests\r\n");
         cursor_y++;
     }
-    if(has_avx){
+    if(has_usable_avx){
         //AVX packed floats SIMD, requires avx
         Print(L"AVX FLOAT ADD: ");
         avx_f32add_benchmark(faddsub_ops/10, tsc_f);
@@ -1418,7 +1446,8 @@ void benchmark_run(){
         run2 = avx_f32add_benchmark(faddsub_ops, tsc_f);
         run3 = avx_f32add_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.a32_add = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"AVX FLOAT SUB: ");
@@ -1427,7 +1456,8 @@ void benchmark_run(){
         run2 = avx_f32sub_benchmark(faddsub_ops, tsc_f);
         run3 = avx_f32sub_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.a32_sub = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
         Print(L"AVX FLOAT MUL: ");
@@ -1436,7 +1466,8 @@ void benchmark_run(){
         run2 = avx_f32mul_benchmark(fmuldiv_ops, tsc_f);
         run3 = avx_f32mul_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.a32_mul = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"AVX FLOAT DIV: ");
@@ -1445,11 +1476,12 @@ void benchmark_run(){
         run2 = avx_f32div_benchmark(fmuldiv_ops, tsc_f);
         run3 = avx_f32div_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.a32_div = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
     }
     else{
-        Print(L"AVX disabled in UEFI, skipping AVX FLOAT tests\r\n");
+        Print(L"AVX disabled, skipping AVX FLOAT tests\r\n");
         cursor_y++;
     }
 
@@ -1463,7 +1495,8 @@ void benchmark_run(){
         run2 = f64add_benchmark(faddsub_ops, tsc_f);
         run3 = f64add_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.f64_add = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"FPU DOUBLE SUB: ");
@@ -1472,7 +1505,8 @@ void benchmark_run(){
         run2 = f64sub_benchmark(faddsub_ops, tsc_f);
         run3 = f64sub_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.f64_sub = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
         Print(L"FPU DOUBLE MUL: ");
@@ -1481,7 +1515,8 @@ void benchmark_run(){
         run2 = f64mul_benchmark(fmuldiv_ops, tsc_f);
         run3 = f64mul_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.f64_mul = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"FPU DOUBLE DIV: ");
@@ -1490,7 +1525,8 @@ void benchmark_run(){
         run2 = f64div_benchmark(fmuldiv_ops, tsc_f);
         run3 = f64div_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.f64_div = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
 
@@ -1501,7 +1537,8 @@ void benchmark_run(){
         run2 = sse2_f64add_benchmark(faddsub_ops, tsc_f);
         run3 = sse2_f64add_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.p64_add = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"SIMD DOUBLE SUB: ");
@@ -1510,7 +1547,8 @@ void benchmark_run(){
         run2 = sse2_f64sub_benchmark(faddsub_ops, tsc_f);
         run3 = sse2_f64sub_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.p64_sub = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
         Print(L"SIMD DOUBLE MUL: ");
@@ -1519,7 +1557,8 @@ void benchmark_run(){
         run2 = sse2_f64mul_benchmark(fmuldiv_ops, tsc_f);
         run3 = sse2_f64mul_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.p64_mul = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"SIMD DOUBLE DIV: ");
@@ -1528,14 +1567,15 @@ void benchmark_run(){
         run2 = sse2_f64div_benchmark(fmuldiv_ops, tsc_f);
         run3 = sse2_f64div_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.p64_div = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
     }
     else{
         Print(L"SSE2 Unsupported, skipping FPU DOUBLE tests\r\n");
         cursor_y++;
     }
-    if(has_avx){
+    if(has_usable_avx){
         //AVX packed doubles SIMD, requires avx
         Print(L"AVX DOUBLE ADD: ");
         avx_f64add_benchmark(faddsub_ops/10, tsc_f);
@@ -1543,7 +1583,8 @@ void benchmark_run(){
         run2 = avx_f64add_benchmark(faddsub_ops, tsc_f);
         run3 = avx_f64add_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.a64_add = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"AVX DOUBLE SUB: ");
@@ -1552,7 +1593,8 @@ void benchmark_run(){
         run2 = avx_f64sub_benchmark(faddsub_ops, tsc_f);
         run3 = avx_f64sub_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.a64_sub = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
         Print(L"AVX DOUBLE MUL: ");
@@ -1561,7 +1603,8 @@ void benchmark_run(){
         run2 = avx_f64mul_benchmark(fmuldiv_ops, tsc_f);
         run3 = avx_f64mul_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.a64_mul = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
         Print(L"AVX DOUBLE DIV: ");
@@ -1570,55 +1613,60 @@ void benchmark_run(){
         run2 = avx_f64div_benchmark(fmuldiv_ops, tsc_f);
         run3 = avx_f64div_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.a64_div = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
     }
     else{
-        Print(L"AVX disabled in UEFI, skipping AVX DOUBLE tests\r\n");
+        Print(L"AVX disabled, skipping AVX DOUBLE tests\r\n");
         cursor_y++;
     }
 
     //AVX int
-    if(has_avx){
-        //AVX packed doubles SIMD, requires avx
-        Print(L"AVX DOUBLE ADD: ");
-        avx_f64add_benchmark(faddsub_ops/10, tsc_f);
-        run1 = avx_f64add_benchmark(faddsub_ops, tsc_f);
-        run2 = avx_f64add_benchmark(faddsub_ops, tsc_f);
-        run3 = avx_f64add_benchmark(faddsub_ops, tsc_f);
+    if(has_usable_avx){
+        //AVX int SIMD, requires avx
+        Print(L"AVX INT ADD: ");
+        avx2_intadd_benchmark(faddsub_ops/10, tsc_f);
+        run1 = avx2_intadd_benchmark(faddsub_ops, tsc_f);
+        run2 = avx2_intadd_benchmark(faddsub_ops, tsc_f);
+        run3 = avx2_intadd_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.aint_add = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
-        Print(L"AVX DOUBLE SUB: ");
-        avx_f64sub_benchmark(faddsub_ops/10, tsc_f);
-        run1 = avx_f64sub_benchmark(faddsub_ops, tsc_f);
-        run2 = avx_f64sub_benchmark(faddsub_ops, tsc_f);
-        run3 = avx_f64sub_benchmark(faddsub_ops, tsc_f);
+        Print(L"AVX INT SUB: ");
+        avx2_intsub_benchmark(faddsub_ops/10, tsc_f);
+        run1 = avx2_intsub_benchmark(faddsub_ops, tsc_f);
+        run2 = avx2_intsub_benchmark(faddsub_ops, tsc_f);
+        run3 = avx2_intsub_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.aint_sub = avg;
+        Print(L"%f MOP/s\r\n", avg/1000000.0);
         cursor_y++;
 
-        Print(L"AVX DOUBLE MUL: ");
-        avx_f64mul_benchmark(fmuldiv_ops/10, tsc_f);
-        run1 = avx_f64mul_benchmark(fmuldiv_ops, tsc_f);
-        run2 = avx_f64mul_benchmark(fmuldiv_ops, tsc_f);
-        run3 = avx_f64mul_benchmark(fmuldiv_ops, tsc_f);
+        Print(L"AVX INT MUL: ");
+        avx2_intmul_benchmark(fmuldiv_ops/10, tsc_f);
+        run1 = avx2_intmul_benchmark(fmuldiv_ops, tsc_f);
+        run2 = avx2_intmul_benchmark(fmuldiv_ops, tsc_f);
+        run3 = avx2_intmul_benchmark(fmuldiv_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s", avg/1000000.0);
+        result.aint_mul = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
-        Print(L"AVX DOUBLE DIV: ");
-        avx_f64div_benchmark(fmuldiv_ops/10, tsc_f);
-        run1 = avx_f64div_benchmark(fmuldiv_ops, tsc_f);
-        run2 = avx_f64div_benchmark(fmuldiv_ops, tsc_f);
-        run3 = avx_f64div_benchmark(fmuldiv_ops, tsc_f);
+        Print(L"AVX INT LOGIC: ");
+        avx2_intlogic_benchmark(fmuldiv_ops/10, tsc_f);
+        run1 = avx2_intlogic_benchmark(faddsub_ops, tsc_f);
+        run2 = avx2_intlogic_benchmark(faddsub_ops, tsc_f);
+        run3 = avx2_intlogic_benchmark(faddsub_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mop/s\r\n", avg/1000000.0);
+        result.aint_logic = avg;
+        Print(L"%f MOP/s", avg/1000000.0);
         cursor_y++;
     }
     else{
-        Print(L"AVX not enabled in UEFI, skipping AVX INT tests\r\n");
+        Print(L"AVX disabled, skipping AVX INT tests\r\n");
         cursor_y++;
     }
 
@@ -1630,14 +1678,14 @@ void benchmark_run(){
         run2 = aes_enc_benchmark(aes_ops, tsc_f);
         run3 = aes_enc_benchmark(aes_ops, tsc_f);
         avg = (run1+run2+run3)/3.0;
-        Print(L"%f Mround/s\r\n", avg/1000000.0);
+        result.aes = avg;
+        Print(L"%f M round/s\r\n", avg/1000000.0);
         cursor_y++;
     }
     else{
         Print(L"AES-NI Unsupported, skipping AES-NI tests\r\n");
         cursor_y++;
     }
-
 
     {
         //MEMORY
@@ -1647,6 +1695,7 @@ void benchmark_run(){
         run2 = mread_benchmark(mem_bufsize, tsc_f);
         run3 = mread_benchmark(mem_bufsize, tsc_f);
         avg = (run1+run2+run3)/3.0;
+        result.mem_read = avg;
         Print(L"%f MB/s", avg/1000000.0);
 
         set_cursor_pos(cursor_x, cursor_y);
@@ -1656,6 +1705,7 @@ void benchmark_run(){
         run2 = mwrite_benchmark(mem_bufsize, tsc_f);
         run3 = mwrite_benchmark(mem_bufsize, tsc_f);
         avg = (run1+run2+run3)/3.0;
+        result.mem_write = avg;
         Print(L"%f MB/s\r\n", avg/1000000.0);
         cursor_y++;
 
@@ -1665,10 +1715,109 @@ void benchmark_run(){
         run2 = mcopy_benchmark(mem_bufsize, tsc_f);
         run3 = mcopy_benchmark(mem_bufsize, tsc_f);
         avg = (run1+run2+run3)/3.0;
+        result.mem_copy = avg;
         Print(L"%f MB/s\r\n", avg/1000000.0);
         cursor_y++;
     }
+    uint64_t t_after = rdtsc();
+    Print(L"Took %f seconds\r\n", (float)((t_after-t_before) / tsc_f));
+    result.time_taken = (uint64_t)((t_after-t_before) / tsc_f);
 
-    Print(L"\r\nPress any key to continue...\r\n");
+    char* re = generate_results(timestamp, &result);
+
+    Print(L"\r\nPress any key to continue...\r\nGenerated results: %a", re);
     get_key();
 }
+
+//returns a malloc'd string
+char* generate_results(EFI_TIME timestamp, benchmark_result* result){
+    //time
+    char* timestr = genTimeStr(timestamp);
+
+    uint64_t buf_size = 2048;
+    char* buf = malloc(2048);
+    uint64_t buf_i = 0; //points to next write char
+
+    //construct results
+    uint64_t len = StrCopy(timestr, buf);
+    buf_i += len;
+
+    buf[buf_i] = ',';
+    buf_i++;
+
+    len = StrCopy(result->model, &buf[buf_i]); buf_i += len;
+
+    buf[buf_i++] = ',';
+
+    //6 bools packed, lowest bit is has_aes, highest is has_sse
+    //  construct
+    uint8_t flags = 
+    (result->has_sse << 5) |
+    (result->has_sse2 << 4) |
+    (result->has_avx << 3) |
+    (result->has_avx2 << 2) |
+    (result->avx_usable << 1) |
+    (result->has_aes);
+    //  copy
+    sprint_fixed_int(&buf[buf_i], (uint64_t)flags); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    //do rest of the params
+    sprint_fixed_double(&buf[buf_i], result->tsc_frequency); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->int_add); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->int_sub); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->int_mul); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->int_div); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->int_logic); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->f32_add); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->f32_sub); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->f32_mul); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->f32_div); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->p32_add); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->p32_sub); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->p32_mul); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->p32_div); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->a32_add); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->a32_sub); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->a32_mul); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->a32_div); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->f64_add); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->f64_sub); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->f64_mul); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->f64_div); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->p64_add); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->p64_sub); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->p64_mul); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->p64_div); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->a64_add); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->a64_sub); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->a64_mul); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->a64_div); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->aint_add);   buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->aint_sub);   buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->aint_mul);   buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->aint_logic); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->aes); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_double(&buf[buf_i], result->mem_read);  buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->mem_write); buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+    sprint_fixed_double(&buf[buf_i], result->mem_copy);  buf_i += SPRINT_FIXED_WIDTH; buf[buf_i++] = ',';
+
+    sprint_fixed_int(&buf[buf_i], result->time_taken); buf_i += SPRINT_FIXED_WIDTH;
+    
+    buf[buf_i] = '\r'; buf_i++;
+    buf[buf_i] = '\n'; buf_i++;
+    buf[buf_i] = '\0';
+
+    return buf;
+}
+
+

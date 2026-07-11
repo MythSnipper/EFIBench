@@ -11,6 +11,7 @@
 bool cpu_has_aes();
 bool cpu_has_avx();
 bool cpu_has_avx2();
+bool cpu_avx_usable();
 bool cpu_has_sse();
 bool cpu_has_sse2();
 

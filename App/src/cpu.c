@@ -10,19 +10,9 @@ bool cpu_has_avx(){
     uint32_t eax, ebx, ecx, edx;
     cpuid(1, 0, &eax, &ebx, &ecx, &edx);
 
-    //do checks for AVX and OSXSAVE 
     bool avx = (ecx & (1 << 28)) != 0;
-    bool osxsave = (ecx & (1 << 27)) != 0;
-    bool sxsave = (ecx & (1 << 26)) != 0;
 
-    if(!avx || !osxsave || !sxsave){
-        return false;
-    }
-
-    //then check xcr0 to see if xmm and ymm states are enabled
-    uint64_t xcr0 = xgetbv(0);
-
-    return (xcr0 & 0x6) == 0x6;
+    return avx;
 }
 
 bool cpu_has_avx2(){
@@ -41,6 +31,29 @@ bool cpu_has_avx2(){
     return (ebx & (1 << 5)) != 0;
 }
 
+bool cpu_avx_usable(){
+    if(!cpu_has_avx()){
+        return false;
+    }
+
+    uint32_t eax, ebx, ecx, edx;
+    cpuid(1, 0, &eax, &ebx, &ecx, &edx);
+
+    //do checks for AVX and OSXSAVE 
+    bool osxsave = (ecx & (1 << 27)) != 0;
+    bool sxsave = (ecx & (1 << 26)) != 0;
+
+    if(!osxsave || !sxsave){
+        return false;
+    }
+
+    //then check xcr0 to see if xmm and ymm states are enabled
+    uint64_t xcr0 = xgetbv(0);
+
+    return (xcr0 & 0x6) == 0x6;
+}
+
+
 bool cpu_has_sse(){
     uint32_t eax, ebx, ecx, edx;
     cpuid(1, 0, &eax, &ebx, &ecx, &edx);
@@ -52,6 +65,7 @@ bool cpu_has_sse2(){
     cpuid(1, 0, &eax, &ebx, &ecx, &edx);
     return (edx & (1 << 26)) != 0;
 }
+
 
 
 void cpu_get_model(char* model){
@@ -74,5 +88,14 @@ void cpu_get_model(char* model){
     }
 
     model[48] = '\0';
-
 }
+
+
+
+
+
+
+
+
+
+
