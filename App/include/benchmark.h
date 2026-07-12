@@ -10,16 +10,27 @@
 #include <timer.h>
 #include <keyboard.h>
 #include <mem.h>
+#include <filesystem.h>
+#include <ui.h>
 
-#define run_bench(benchname, ops, bench_func, result_member, unit)\
-    Print(L"benchname: ");\
-    bench_func(ops/10, tsc_f);\
-    run1 = bench_func(ops, tsc_f);\
-    run2 = bench_func(ops, tsc_f);\
-    run3 = bench_func(ops, tsc_f);\
-    avg = (run1+run2+run3)/3.0;\
-    result.result_member = avg;\
-    Print(L"%f unit/s", avg/1000000.0);\
+#define RUN_BENCH(label, ops, bench_func, result_member, unit, newline)\
+    do {\
+        double _run1, _run2, _run3, _avg;\
+        Print(L"%s: ", (label));\
+        (void)(bench_func)((ops) / 10, tsc_f);\
+        _run1 = (bench_func)((ops), tsc_f);\
+        _run2 = (bench_func)((ops), tsc_f);\
+        _run3 = (bench_func)((ops), tsc_f);\
+        _avg = (_run1+_run2+_run3)/3;\
+        result.result_member = _avg;\
+        Print(\
+            (newline) ? L"%f %s/s\r\n" : L"%f %s/s",\
+            _avg / 1000000.0,\
+            (unit)\
+        );\
+    } while (0)
+
+#define BENCH_RESULTS_PATH L"\\EFIBench\\results.txt"
 
 
 typedef struct{
@@ -44,6 +55,11 @@ typedef struct{
     uint64_t time_taken; //s
 } benchmark_result;
 
+typedef struct{
+    char time[20];
+    benchmark_result result;
+} bench_file_entry;
+
 double measure_tsc_freq(double test_duration_ms);
 
 void stress_cpu(uint64_t ms, double tsc_freq_hz);
@@ -51,7 +67,8 @@ void stress_cpu(uint64_t ms, double tsc_freq_hz);
 void benchmark_run();
 
 char* generate_results(EFI_TIME timestamp, benchmark_result* result);
-char* genTimeStr(EFI_TIME time);
+char* parse_result_entry(char* buf, bench_file_entry* entry);
+uint64_t parse_result_file(bench_file_entry* entries_out);
 
 
 #endif

@@ -1,7 +1,6 @@
 
 #include <ui.h>
 
-
 uint64_t run_selection_menu(wchar_t* title, wchar_t** entries, uint64_t entries_count, uint64_t selected){
     if (entries_count == 0) {
         return 0;
@@ -100,7 +99,51 @@ uint64_t run_selection_menu(wchar_t* title, wchar_t** entries, uint64_t entries_
         if(selected_entry == -1)selected_entry = entries_count-1;
         if(selected_entry == entries_count)selected_entry = 0;
     }
+}
 
+uint64_t run_selection_menu_benchmark(){
+    //entries
+    wchar_t* entries[] = {
+        L"Save results",
+        L"Exit without saving"
+    };
+    uint64_t entries_count = sizeof(entries)/sizeof(entries[0]);
+
+    //selected entry(index of entries)
+    int64_t selected_entry = 0;
+
+    //Loop
+    while(1){
+        //display entries
+        for(int i=0;i<entries_count;i++){
+            //use highlight color if selected
+            if(i == selected_entry)set_color(COLOR_HIGHLIGHT);
+            
+            //last row - 1, um idk i forgor lol
+            set_cursor_pos(i * 39 + 4, 23);
+            Print(L"%s", entries[i]);
+
+            //reset highlight color if selected
+            if(i == selected_entry)set_color(COLOR_NORMAL);
+        }
+
+        //read keystroke
+        EFI_INPUT_KEY key = get_key();
+
+        //update index based on key
+        if(key.UnicodeChar == L'\r'){ //enter key
+            return selected_entry;
+        }
+        if(key.ScanCode == SCAN_LEFT || key.UnicodeChar == L'a'){
+            selected_entry--;
+        }
+        if(key.ScanCode == SCAN_RIGHT || key.UnicodeChar == L'd'){
+            selected_entry++;
+        }
+        //restrain and loop selected entry to be in range
+        if(selected_entry == -1)selected_entry = entries_count-1;
+        if(selected_entry == entries_count)selected_entry = 0;
+    }
 }
 
 //entries count does not include Back and Edit
@@ -205,7 +248,7 @@ void menu_main(){
 void menu_boot(){
     //read entries file
     uint64_t size;
-    char* data = read_file(L"\\EFIBench\\entries.txt", &size);
+    char* data = read_file(ENTRIES_FILE_PATH, &size);
 
     boot_entry* entries;
     uint64_t entries_count = parse_boot_entries(data, &entries);
@@ -226,14 +269,14 @@ void menu_boot(){
                 menu_boot_edit_add();
                 free(data);
                 free(entries);
-                data = read_file(L"\\EFIBench\\entries.txt", &size);
+                data = read_file(ENTRIES_FILE_PATH, &size);
                 entries_count = parse_boot_entries(data, &entries);
             break;
             case 2:
                 menu_boot_edit_remove();
                 free(data);
                 free(entries);
-                data = read_file(L"\\EFIBench\\entries.txt", &size);
+                data = read_file(ENTRIES_FILE_PATH, &size);
                 entries_count = parse_boot_entries(data, &entries);
             break;
             default:
@@ -245,7 +288,7 @@ void menu_boot(){
 void menu_boot_edit_add(){
     //read entries file
     uint64_t size;
-    char* data = read_file(L"\\EFIBench\\entries.txt", &size);
+    char* data = read_file(ENTRIES_FILE_PATH, &size);
 
     boot_entry* entries;
     uint64_t entries_count = parse_boot_entries(data, &entries);

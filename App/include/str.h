@@ -20,7 +20,7 @@ void sprint2ch(char* buf, uint64_t num);
 void sprint4ch(char* buf, uint64_t num);
 
 //defines for sprint fixed
-#define SPRINT_FIXED_SCALE 1000000
+#define SPRINT_FIXED_SCALE 1000
 #define SPRINT_FIXED_WIDTH 20
 void sprint_fixed_double(char* buf, double num);
 void sprint_fixed_int(char* buf, uint64_t num);

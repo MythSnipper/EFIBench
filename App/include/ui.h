@@ -21,6 +21,7 @@
 
 
 uint64_t run_selection_menu(wchar_t* title, wchar_t** entries, uint64_t entries_count, uint64_t selected);
+uint64_t run_selection_menu_benchmark();
 uint64_t run_selection_menu_boot(wchar_t* title, boot_entry* entries_boot, uint64_t entries_count, uint64_t selected);
 wchar_t* run_prompt(wchar_t* prompt, uint64_t max_len, bool* quit);
 void menu_main();
