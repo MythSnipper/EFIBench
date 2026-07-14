@@ -1,5 +1,6 @@
-
 #include <ui.h>
+
+#include <benchmark.h>
 
 uint64_t run_selection_menu(wchar_t* title, wchar_t** entries, uint64_t entries_count, uint64_t selected){
     if (entries_count == 0) {
@@ -169,6 +170,102 @@ uint64_t run_selection_menu_boot(wchar_t* title, boot_entry* entries_boot, uint6
     return ret;
 }
 
+//entries count does not include Back and Edit
+uint64_t run_selection_menu_view_previous(wchar_t* title, bench_file_entry* bench_entries, uint64_t entries_count, uint64_t selected){
+    //selected entry(index of entries)
+    int64_t selected_entry = selected;
+
+    //construct strings of entries
+    wchar_t** entries = NULL;
+    entries = malloc(sizeof(wchar_t*) * (entries_count+2));
+    entries[0] = L"Back";
+    entries[1] = L"Remove result";
+    for(int i=0;i<entries_count;i++){
+        char* tmp = StrAppend(bench_entries[i].label, ",");
+        char* tmp2 = StrAppend(tmp, bench_entries[i].time);
+        wchar_t* tmp3 = malloc(sizeof(wchar_t) * (strlen(tmp2) + 1));
+        charstr_to_wcharstr(tmp2, tmp3);
+        free(tmp);
+        free(tmp2);
+        entries[i+2] = tmp3;
+    }
+    
+    entries_count += 2;
+
+    uint64_t ret = run_selection_menu(title, entries, entries_count, selected);
+
+    //free created entry strings and entries itself
+    for(int i=0;i<entries_count-2;i++){
+        free(entries[i+2]);
+    }
+    free(entries);
+
+    return ret;
+}
+
+//entries count does not include Back and Edit
+uint64_t run_selection_menu_view_previous_edit(wchar_t* title, bench_file_entry* bench_entries, uint64_t entries_count, uint64_t selected){
+    //selected entry(index of entries)
+    int64_t selected_entry = selected;
+
+    //construct strings of entries
+    wchar_t** entries = NULL;
+    entries = malloc(sizeof(wchar_t*) * (entries_count+1));
+    entries[0] = L"Back";
+    for(int i=0;i<entries_count;i++){
+        char* tmp = StrAppend(bench_entries[i].label, ",");
+        char* tmp2 = StrAppend(tmp, bench_entries[i].time);
+        wchar_t* tmp3 = malloc(sizeof(wchar_t) * (strlen(tmp2) + 1));
+        charstr_to_wcharstr(tmp2, tmp3);
+        free(tmp);
+        free(tmp2);
+        entries[i+1] = tmp3;
+    }
+    
+    entries_count += 1;
+
+    uint64_t ret = run_selection_menu(title, entries, entries_count, selected);
+
+    //free created entry strings and entries itself
+    for(int i=0;i<entries_count-1;i++){
+        free(entries[i+2]);
+    }
+    free(entries);
+
+    return ret;
+}
+
+void menu_view_result_detail(bench_file_entry* entry){
+    if(entry == NULL){
+        return;
+    }
+    clrscr();
+
+    Print(L"Benchmark Result\r\n");
+    Print(L"================\r\n\r\n");
+
+    Print(L"Time: %a\r\n", entry->time);
+    Print(L"CPU:  %a\r\n", entry->result.model);
+
+    Print(L"\r\nInteger:\r\n");
+    Print(L"ADD:   %f MOP/s\r\n", entry->result.int_add / 1000000.0);
+    Print(L"SUB:   %f MOP/s\r\n", entry->result.int_sub / 1000000.0);
+    Print(L"MUL:   %f MOP/s\r\n", entry->result.int_mul / 1000000.0);
+    Print(L"DIV:   %f MOP/s\r\n", entry->result.int_div / 1000000.0);
+    Print(L"LOGIC: %f MOP/s\r\n", entry->result.int_logic / 1000000.0);
+
+    Print(L"\r\nMemory:\r\n");
+    Print(L"READ:  %f MB/s\r\n", entry->result.mem_read / 1000000.0);
+    Print(L"WRITE: %f MB/s\r\n", entry->result.mem_write / 1000000.0);
+    Print(L"COPY:  %f MB/s\r\n", entry->result.mem_copy / 1000000.0);
+
+    set_cursor_pos(0, 24);
+    Print(L"Press any key to return");
+
+    get_key();
+}
+
+//returns a malloc'd string
 wchar_t* run_prompt(wchar_t* prompt, uint64_t max_len, bool* quit){
     wchar_t* ret = malloc(sizeof(wchar_t) * (max_len+1));
     ret[0] = L'\0';
@@ -415,24 +512,48 @@ void menu_benchmarks(){
 }
 
 void menu_view_previous(){
-    wchar_t* entries[] = {
-        L"Back"
-    };
-    uint64_t entries_count = sizeof(entries)/sizeof(entries[0]);
+    bench_file_entry* bench_entries;
+    uint64_t bench_entries_count = parse_result_file(&bench_entries);
 
     //make selected entry persistent so it doesn't start at the first one every time
     uint64_t selected = 0;
 
     while(1){
-        selected = run_selection_menu(L"View Previous Results", entries, entries_count, selected);
-        //go to another menu
+        selected = run_selection_menu_view_previous(L"View Previous Results", bench_entries, bench_entries_count, selected);
         switch(selected){
             case 0:
+                free(bench_entries);
                 return;
+            break;
+            case 1:
+                menu_view_previous_edit();
+            break;
+            default:
+                menu_view_result_detail(&bench_entries[selected-2]);
             break;
         }
     }
 }
+
+//removes an entry
+void menu_view_previous_edit(){
+    clrscr();
+    bench_file_entry* bench_entries;
+    uint64_t bench_entries_count = parse_result_file(&bench_entries);
+    
+    uint64_t selected = run_selection_menu_view_previous_edit(L"Select a result to delete:", bench_entries, bench_entries_count, selected);
+    switch(selected){
+        case 0:
+            return;
+        break;
+        default:
+            menu_view_result_detail(&bench_entries[selected-1]);
+        break;
+    }
+
+    free(bench_entries);
+}
+
 
 void menu_settings(){
     wchar_t* entries[] = {

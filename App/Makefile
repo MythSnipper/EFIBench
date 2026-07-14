@@ -66,8 +66,8 @@ debug: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-deb
 test: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-kvm
 test2: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu
 
-run: givesudo qemu-kvm
-run2: givesudo qemu
+run: givesudo qemu-refresh qemu-kvm
+run2: givesudo qemu-refresh qemu
 
 givesudo:
 	sudo echo give me sudo

@@ -107,11 +107,12 @@ void sprint_fixed_int(char* buf, uint64_t num){
     }    
 }
 double parse_fixed_double(char* buf){
-    uint64_t ret = 0.0;
-    for(uint64_t i=SPRINT_FIXED_WIDTH-1;i>=0;i--){
+    uint64_t ret = 0;
+    for(uint64_t i=0;i<SPRINT_FIXED_WIDTH;i++){
         ret *= 10;
         ret += (buf[i] - '0');
     }
+    
     return ((double)(ret) / SPRINT_FIXED_SCALE);
 }
 

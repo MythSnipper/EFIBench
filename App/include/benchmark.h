@@ -33,7 +33,7 @@
 #define BENCH_RESULTS_PATH L"\\EFIBench\\results.txt"
 
 
-typedef struct{
+typedef struct benchmark_result{
     char model[49];
     bool has_sse, has_sse2, has_avx, has_avx2, avx_usable, has_aes;
 
@@ -55,7 +55,11 @@ typedef struct{
     uint64_t time_taken; //s
 } benchmark_result;
 
-typedef struct{
+#define BENCH_LABEL_LEN 32
+
+
+typedef struct bench_file_entry{
+    char label[BENCH_LABEL_LEN + 1];
     char time[20];
     benchmark_result result;
 } bench_file_entry;
@@ -66,9 +70,9 @@ void stress_cpu(uint64_t ms, double tsc_freq_hz);
 
 void benchmark_run();
 
-char* generate_results(EFI_TIME timestamp, benchmark_result* result);
+char* generate_results(char* label, EFI_TIME timestamp, benchmark_result* result);
 char* parse_result_entry(char* buf, bench_file_entry* entry);
-uint64_t parse_result_file(bench_file_entry* entries_out);
+uint64_t parse_result_file(bench_file_entry** entries_out);
 
 
 #endif

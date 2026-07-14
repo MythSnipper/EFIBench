@@ -956,8 +956,6 @@ double avx_f64div_benchmark(uint64_t ops, double tsc_freq_hz){
     return (ops << 4) / ((after-prev)/tsc_freq_hz);
 }
 
-
-
 double avx2_intadd_benchmark(uint64_t ops, double tsc_freq_hz){
     ops >>= 5; //div by 32
     __asm__ volatile(
@@ -1714,22 +1712,50 @@ void benchmark_run(){
     Print(L"Took %f seconds\r\n", (float)((t_after-t_before) / tsc_f));
     result.time_taken = (uint64_t)((t_after-t_before) / tsc_f);
 
-    char* re = generate_results(timestamp, &result);
-
-    Print(L"\r\n");
     uint64_t sel = run_selection_menu_benchmark();
 
     switch(sel){
         case 0:
             //save the results
             {
+                bool quit;
+                wchar_t* label_w = run_prompt(L"Enter label for this benchmark result:", BENCH_LABEL_LEN, &quit);
+                if(quit){
+                    label_w = L"Benchmark result                ";
+                }
+                else{
+                    //loop through string
+                    for(uint64_t i=0;i<BENCH_LABEL_LEN;i++){
+                        //if found premature null terminator
+                        if(label_w[i] = L'\0'){
+                            label_w[i] = L' ';
+                            //loop from the null terminator to the end, padding spaces
+                            for(uint64_t l=i+1;l<BENCH_LABEL_LEN;l++){
+                                label_w[l] = L' ';
+                            }
+
+                            //break out of outer loop
+                            break;
+                        }
+                    }
+                    label_w[BENCH_LABEL_LEN] = L'\0'; //null terminator
+                }
+
+                char* label = malloc(BENCH_LABEL_LEN+1);
+                label[BENCH_LABEL_LEN] == '\0'; //just in case the below function fails to put a null terminator
+                wcharstr_to_charstr(label_w, label);
+                if(!quit){
+                    free(label_w);
+                }
+
                 clrscr();
                 char* timestr = genTimeStr(timestamp);
                 Print(L"  \r\nSaving results with timestamp %a...\r\n", timestr);
                 free(timestr);
 
                 //serialize struct
-                char* results_str = generate_results(timestamp, &result);
+                char* results_str = generate_results(label, timestamp, &result);
+                free(label);
 
                 //append to file
                 append_file(BENCH_RESULTS_PATH, results_str);
@@ -1744,7 +1770,7 @@ void benchmark_run(){
 }
 
 //returns a malloc'd string
-char* generate_results(EFI_TIME timestamp, benchmark_result* result){
+char* generate_results(char* label, EFI_TIME timestamp, benchmark_result* result){
     //time
     char* timestr = genTimeStr(timestamp);
 
@@ -1833,12 +1859,31 @@ char* generate_results(EFI_TIME timestamp, benchmark_result* result){
 
     free(timestr);
 
-    return buf;
+
+    //add label
+    char* tmp = StrAppend(label, ",");
+    char* tmp2 = StrAppend(tmp, buf);
+    free(tmp);
+    free(buf);
+
+    return tmp2;
 }
 
 //parses an entry of bench_file_entry, fills entry struct, and returns pointer to next character
 char* parse_result_entry(char* buf, bench_file_entry* entry){
     uint64_t buf_i = 0; //index to curr read char in buf
+
+    //copy label from buf to entry->label
+    uint64_t entry_label_i = 0; //index to next fill char in entry->label
+    while(buf[buf_i] != ','){
+        entry->label[entry_label_i] = buf[buf_i];
+        buf_i++;
+        entry_label_i++;
+    }
+    //null terminate label
+    entry->label[entry_label_i] = '\0';
+    //skip ,
+    buf_i++;
 
     //copy time from buf to entry->time
     uint64_t entry_time_i = 0; //index to next fill char in entry->time
@@ -1847,6 +1892,8 @@ char* parse_result_entry(char* buf, bench_file_entry* entry){
         buf_i++;
         entry_time_i++;
     }
+    //null terminate time
+    entry->time[entry_time_i] = '\0';
     //skip ,
     buf_i++;
 
@@ -1857,6 +1904,8 @@ char* parse_result_entry(char* buf, bench_file_entry* entry){
         buf_i++;
         entry_result_i++;
     }
+    //null terminate model
+    entry->result.model[entry_result_i] = '\0';
     //skip ,
     buf_i++;
 
@@ -1925,13 +1974,61 @@ char* parse_result_entry(char* buf, bench_file_entry* entry){
 
     entry->result.time_taken = (uint64_t)parse_fixed_double(&buf[buf_i]); buf_i += SPRINT_FIXED_WIDTH;
 
+    //skip newline
+    if(buf[buf_i] == '\r'){
+        buf_i++;
+    }
     
+    if(buf[buf_i] == '\n'){
+        buf_i++;
+    }
+
+    return &buf[buf_i];
 }
 
 //parses the results file, returns number of entries and modifies pointer to point to malloc'd, array of entries
-uint64_t parse_result_file(bench_file_entry* entries_out){
+uint64_t parse_result_file(bench_file_entry** entries_out){
+    *entries_out = NULL;
+
     //open and read file
-    
+    uint64_t filesize;
+    char* file = read_file(BENCH_RESULTS_PATH, &filesize);
+    uint64_t file_i = 0; //index to next char read in file
 
     //count number of results by counting newlines
+    uint64_t n_entries = 0;
+    {
+        uint64_t i=0;
+        while(file[i] != '\0'){
+            if(file[i] == '\n'){
+                n_entries++;
+            }
+            i++;
+        }
+    }
+
+    //if no entries
+    if(n_entries == 0){
+        free(file);
+        return 0;
+    }
+
+    //allocate enough mem to store n_entries x bench_file_entry
+    bench_file_entry* entries = (bench_file_entry*)malloc(n_entries * sizeof(bench_file_entry));
+    for(uint64_t i=0;i<(n_entries * sizeof(bench_file_entry));i++){
+        ((char*)(entries))[i] = '\0';
+    }
+    Print(L"ALlocated and zfilelfd\r\n");
+
+    //populate
+    char* tmp = file; //pointer to next entry in file
+    for(uint64_t i=0;i<n_entries;i++){
+        tmp = parse_result_entry(tmp, &entries[i]);
+    }
+    free(file);
+    
+    *entries_out = entries;
+
+    return n_entries;
 }
+
