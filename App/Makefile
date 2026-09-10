@@ -3,7 +3,7 @@
 DEVICE ?= /dev/null
 
 #part to install on
-p ?=
+p ?= p
 EFI_PART ?= $(DEVICE)$(p)1
 
 #UEFI files for QEMU
@@ -12,6 +12,7 @@ QEMU_UEFI_VARS = OVMF_VARS.fd
 
 #tools used
 CC = gcc
+CXX = g++
 LD = ld
 OCP = objcopy
 AS = nasm
@@ -32,6 +33,11 @@ CFLAGS = \
 	-mno-red-zone \
 	-maccumulate-outgoing-args \
 	-O2
+
+CXXFLAGS = $(CFLAGS) \
+	-fno-exceptions \
+	-fno-rtti
+
 
 LDFLAGS = \
 	-shared \
@@ -109,7 +115,7 @@ copy-to-usbroot:
 #copy files to device
 copy-to-device:
 	lsblk
-
+	mkdir -p mount
 	sudo mount $(EFI_PART) mount/
 	sudo rm -rf mount/*
 	sudo cp -r usbroot/* mount/
@@ -170,9 +176,9 @@ qemu-refresh:
 #ramdisk size 100M
 ramdisk_size = 102400
 
-ramdisk:
+ramdisk: 
 	sudo modprobe brd rd_nr=1 rd_size=$(ramdisk_size)
-
+ 
 	printf "g\nn\n\n\n\nt\n1\nw\n" | sudo fdisk /dev/ram0
 
 	sudo partprobe /dev/ram0
