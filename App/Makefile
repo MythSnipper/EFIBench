@@ -66,7 +66,6 @@ OCPFLAGS = \
 	--output-target efi-app-x86_64 \
 	--subsystem=10
 
-
 debug: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-debug
 
 test: givesudo clean build copy-to-usbroot copy-to-device qemu-refresh qemu-kvm
@@ -86,16 +85,17 @@ build:
 	mkdir -p build
 	$(CC) $(CFLAGS) -c src/bootmgmt.c -o build/bootmgmt.o
 	$(CC) $(CFLAGS) -c src/efi_image.c -o build/efi_image.o
-	$(CC) $(CFLAGS) -c src/main.c -o build/main.o
+	$(CC) $(CFLAGS) -c src/efi_main.c -o build/efi_main.o
 	$(CC) $(CFLAGS) -c src/filesystem.c -o build/filesystem.o
 	$(CC) $(CFLAGS) -c src/keyboard.c -o build/keyboard.o
 	$(CC) $(CFLAGS) -c src/mem.c -o build/mem.o
 	$(CC) $(CFLAGS) -c src/str.c -o build/str.o
 	$(CC) $(CFLAGS) -c src/ui.c -o build/ui.o
 	$(CC) $(CFLAGS) -c src/utils.c -o build/utils.o
-	$(CC) $(CFLAGS) -c src/pcspkr.c -o build/pcspkr.o
 	$(CC) $(CFLAGS) -c src/cpu.c -o build/cpu.o
 	$(CC) $(CFLAGS) -c src/timer.c -o build/timer.o
+
+	$(CXX) $(CXXFLAGS) -c src/main.cpp -o build/main.o
 
 #no optimizations
 	$(CC) $(CFLAGS) -fno-unroll-loops -fno-peel-loops -fno-unswitch-loops -fno-tree-vectorize -c src/benchmark.c -o build/benchmark.o
@@ -103,7 +103,6 @@ build:
 	$(LD) $(LDFLAGS) build/*.o -o build/EFIBench.so $(LDFLAGS_L)
 	$(STRIP) build/EFIBench.so
 	$(OCP) $(OCPFLAGS) build/EFIBench.so build/EFIBench.efi
-
 
 #copy code and data to usbroot
 copy-to-usbroot:
@@ -169,10 +168,6 @@ qemu-refresh:
 	cp ovmf/$(QEMU_UEFI_CODE) ovmf/temp/
 	cp ovmf/$(QEMU_UEFI_VARS) ovmf/temp/
 
-
-
-
-
 #ramdisk size 100M
 ramdisk_size = 102400
 
@@ -190,7 +185,3 @@ ramdisk:
 
 uramdisk:
 	sudo modprobe -r brd
-
-
-
-

@@ -1,9 +1,10 @@
-#include <main.h>
+#include <efi_main.h>
+#include <ui.h> //definitions for ui colors
 
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
-    InitializeLib(ImageHandle, SystemTable);
+EFI_STATUS EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
+    InitializeLib(ImageHandle, SystemTable); //initialize GNU-EFI during runtime
 
-    //set to global
+    //set to be used globally
     IH = ImageHandle;
 
     //disable watchdog timer
@@ -12,12 +13,14 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable){
     uefi_call_wrapper(ST->ConOut->SetMode, 2, ST->ConOut, 0);
     //disable cursor
     uefi_call_wrapper(ST->ConOut->EnableCursor, 2, ST->ConOut, 0);
-    //set color
+    //set text color
     set_color(COLOR_NORMAL);
     //clear screen
     clrscr();
 
-    menu_main();
+    //transfer control to C++ main
+    cpp_main();
+    //hang if cpp_main exits, unintended behavior
     hang();
 
     return EFI_SUCCESS;
